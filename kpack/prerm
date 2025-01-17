@@ -1,0 +1,25 @@
+#!/bin/bash
+
+version_check(){
+    if [ "$(uname -r)" == "VERSION" ];then
+        echo "WARNING"
+        echo ""
+        echo "you are trying to remove currently running kernel"
+        echo "this is not very good idea, please boot into diffrent"
+        echo "kernel version first and make sure it's set as always"
+        echo "booting NOT TESTING"
+        echo ""
+        echo "if you want to continue, please type \"i want to break my system\""
+
+        read reply
+
+        if [ "$reply" != "i want to break my system" ];then
+            exit 1
+        fi
+    fi
+}
+
+if [ "$1" = "remove" ] || [ "$1" = "purge" ]; then
+    # we shouldn't let ppl remove currently running kernel
+    version_check
+fi

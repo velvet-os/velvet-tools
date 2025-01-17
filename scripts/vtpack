@@ -23,14 +23,20 @@ make_dir(){
 make_deb(){
     make_dir
 
-    echo "Package: linux-${kver}" >> linux-${kver}/DEBIAN/control
-    echo "Version: ${kver}" >> linux-${kver}/DEBIAN/control
-    echo "Architecture: $(dpkg --print-architecture)" >> linux-${kver}/DEBIAN/control
-    echo "Depends: velvet-tools" >> linux-${kver}/DEBIAN/control
-    #logname gives the username even under sudo
-    echo "Maintainer: $1" >> linux-${kver}/DEBIAN/control
-    echo "Description: kernel ${kver} package" >> linux-${kver}/DEBIAN/control
-    echo "Triggers: update-initramfs" >> linux-${kver}/DEBIAN/control
+    cp -v /usr/share/velvettools/kpack/* "linux-${kver}/DEBIAN/"
+
+    for file in linux-${kver}/DEBIAN/* ;do
+        echo "PATCHING $file"
+
+        if [ "$file" != "linux-${kver}/DEBIAN/control" ];then
+            echo "making executable"
+            chmod +x $file
+        fi
+
+        sed -i "s/VERSION/${kver}/g" $file
+        sed -i "s/ARCH/$(dpkg --print-architecture)/g" $file
+        sed -i "s/MAINTAINER/$1/g" $file
+    done
 
     echo "this might take a while, be patient"
     dpkg --build linux-${kver}
@@ -62,9 +68,7 @@ if [ "$1" == "deb" ];then
         make_deb "$(logname)"
     fi
 
-    if [ "$(arch)" == "aarch64" ];then #will add other arch when feel like it maybe
-        arch=arm64
-    fi
+    arch=$(dpkg --print-architecture)
 
     mv linux-${kver}.deb linux-${kver}-1_$arch.deb -v
 fi

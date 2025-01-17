@@ -74,18 +74,33 @@ check_flashable_kver() {
 }
 
 flashing_error(){
+    echo "WARNING"
     echo ""
-    echo "Warning. the image was likely to big to flash"
-    echo "have you tried putting"
+    echo "There was a flashing issue, your device might be"
+    echo "UNABLE TO BOOT"
+    echo ""
+    echo "the image was likely to big to flash"
+    echo ""
+    echo "try putting"
     echo ""
     echo "COMPRESS=xz"
     echo "XZ_OPT='-9 --check=crc32 –memlimit-compress=25%'"
     echo ""
-    echo "in /etc/initramfs-tools/conf.d/compress ?"
+    echo "in /etc/initramfs-tools/conf.d/compress"
     echo ""
-    echo "or putting all the required dtb's inside /boot/dtbs file"
+    echo "or"
+    echo ""
+    echo "putting all the required dtb's inside /boot/dtbs file"
     echo "\"vthelp dtbs\" for more details"
     echo "Note. only do this if you know what you're doing"
     echo ""
-    echo "then building image with vtbuild <version>"
+    echo "THEN building image with vtbuild <version> and retry flashing"
+    echo ""
+    echo "if you understand please type \"understood\""
+
+    read reply
+    if [ "$reply" != "understood" ];then
+        echo "THIS IS IMPORTANT"
+        flashing_error
+    fi;
 }

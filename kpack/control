@@ -1,0 +1,7 @@
+Package: linux-VERSION
+Version: VERSION
+Architecture: ARCH
+Depends: velvet-tools
+Maintainer: MAINTAINER
+Description: kernel VERSION package
+Triggers: update-initramfs

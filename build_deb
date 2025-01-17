@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION=0.6.8
+VERSION=0.7.0
 RELEASENUMBER=1 #only increse temporary if fix touches only deb/DEBIAN
 
 rm -rf deb
@@ -15,6 +15,7 @@ mkdir -p deb/lib/systemd/system
 mkdir -p deb/usr/share/velvettools/help
 mkdir -p deb/usr/share/velvettools/hooks
 mkdir -p deb/usr/share/velvettools/bash
+mkdir -p deb/usr/share/velvettools/kpack
 mkdir -p deb/etc/initramfs-tools/hooks
 mkdir -p deb/etc/initramfs/post-update.d
 
@@ -24,6 +25,9 @@ cp other/postinst deb/DEBIAN/postinst -v
 cp other/postrm deb/DEBIAN/postrm -v
 cp other/prerm deb/DEBIAN/prerm -v
 sed -i "s/VERSION/${VERSION}/g" deb/DEBIAN/control
+
+#kpack files
+cp kpack/* deb/usr/share/velvettools/kpack/ -v
 
 #main binaries (bash scripts)
 cp scripts/vt* deb/usr/local/bin/ -v
