@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION=0.7.0
+VERSION=0.7.1
 RELEASENUMBER=1 #only increse temporary if fix touches only deb/DEBIAN
 
 rm -rf deb
@@ -7,7 +7,7 @@ rm -rf deb
 mkdir deb
 
 #deb structure
-mkdir -p deb/usr/local/bin
+mkdir -p deb/usr/bin
 mkdir -p deb/DEBIAN
 mkdir -p deb/etc/bash_completion.d
 mkdir -p deb/etc/velvettools
@@ -30,7 +30,7 @@ sed -i "s/VERSION/${VERSION}/g" deb/DEBIAN/control
 cp kpack/* deb/usr/share/velvettools/kpack/ -v
 
 #main binaries (bash scripts)
-cp scripts/vt* deb/usr/local/bin/ -v
+cp scripts/vt* deb/usr/bin/ -v
 
 #bash autocompletion
 cp bashcompletion/velvettools deb/usr/share/velvettools/bash/velvettools -v

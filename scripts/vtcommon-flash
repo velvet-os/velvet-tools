@@ -34,6 +34,14 @@ get_partid_kpart_and_pdisk_from_drive(){
     id="${1//$kpart/}"
 }
 
+file_size(){
+    stat --format="%s" $1
+}
+
+partition_size(){
+    lsblk -b -n -o SIZE -p $1
+}
+
 flash_procedure(){
     if [ "$#" == "2" ] && [ "${2}" != "yes" ]; then
         get_partid_kpart_and_pdisk_from_drive $2
@@ -57,7 +65,40 @@ flash_procedure(){
         need_confirmation
     fi
 
+    image_size=$(file_size "/boot/vmlinux.kpart-initrd-${kver}")
+    part_size=$(partition_size ${kpart}${id})
+
+    # check if image is bigger then the partition
+    if [ "$image_size" -gt "$part_size" ]; then
+        echo "The image (/boot/vmlinux.kpart-initrd-${kver} $image_size) is too big"
+        echo "to flash onto partition (${kpart}${id} $part_size)"
+        echo ""
+        echo "FLASHING ABORTED"
+        echo ""
+        echo "try putting"
+        echo ""
+        echo "COMPRESS=xz"
+        echo "XZ_OPT='-9 --check=crc32 –memlimit-compress=25%'"
+        echo ""
+        echo "in /etc/initramfs-tools/conf.d/compress"
+        echo ""
+        echo "or"
+        echo ""
+        echo "putting all the required dtb's inside /boot/dtbs file"
+        echo "\"vthelp dtbs\" for more details"
+        echo "Note. only do this if you know what you're doing"
+        echo ""
+        echo "THEN building image with vtbuild <version> and retry flashing"
+
+        exit 0;
+    fi
+
+    echo "Flashing"
+    echo "image (/boot/vmlinux.kpart-initrd-${kver} $image_size)"
+    echo "partition (${kpart}${id} $part_size)"
+
     dd if=/boot/vmlinux.kpart-initrd-${kver} of=${kpart}${id}
+
 
     if [ $? == "1" ]; then
         flashing_error
@@ -78,23 +119,6 @@ flashing_error(){
     echo ""
     echo "There was a flashing issue, your device might be"
     echo "UNABLE TO BOOT"
-    echo ""
-    echo "the image was likely to big to flash"
-    echo ""
-    echo "try putting"
-    echo ""
-    echo "COMPRESS=xz"
-    echo "XZ_OPT='-9 --check=crc32 –memlimit-compress=25%'"
-    echo ""
-    echo "in /etc/initramfs-tools/conf.d/compress"
-    echo ""
-    echo "or"
-    echo ""
-    echo "putting all the required dtb's inside /boot/dtbs file"
-    echo "\"vthelp dtbs\" for more details"
-    echo "Note. only do this if you know what you're doing"
-    echo ""
-    echo "THEN building image with vtbuild <version> and retry flashing"
     echo ""
     echo "if you understand please type \"understood\""
 
