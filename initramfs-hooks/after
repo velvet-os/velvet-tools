@@ -11,7 +11,7 @@ unknown_error(){
 
 #don't run vtbuild if command was ran by vtbuild
 if [ ! -f /boot/norebuild ]; then
-  /usr/local/bin/vtbuild $(cat /boot/to-update) noinitgen || unknown_error
+  /usr/bin/vtbuild $(cat /boot/to-update) noinitgen || unknown_error
   rm /boot/to-update
 fi
 
