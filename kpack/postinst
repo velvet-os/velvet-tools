@@ -1,6 +1,6 @@
 #!/bin/bash
 touch /boot/norebuild
 
-update-initramfs -c -k 
+update-initramfs -c -k VERSION
 
 rm /boot/norebuild 2> /dev/null

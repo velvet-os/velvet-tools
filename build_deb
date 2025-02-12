@@ -1,5 +1,5 @@
 #!/bin/bash
-VERSION=0.7.2
+VERSION=0.7.3
 RELEASENUMBER=1 #only increse temporary if fix touches only deb/DEBIAN
 
 rm -rf deb
@@ -48,7 +48,7 @@ cp daemon/vtcheck.service deb/lib/systemd/system/vtcheck.service
 #default config
 cp other/config deb/usr/share/velvettools/config -v
 
-dpkg-deb --build deb
+dpkg-deb --build --root-owner-group deb
 
 #<package-name>_<version>-<release-number>_<architecture>
 mv deb.deb velvettools-${VERSION}-${RELEASENUMBER}_all.deb -v

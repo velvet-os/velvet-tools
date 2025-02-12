@@ -32,36 +32,60 @@ if [ ! -f "initrd.img-${kver}" ]; then
   exit 1
 fi
 
-if [ ! -f cmdline ]; then
-  echo "cmdline seams to be missing"
-  echo "Note. will create one for you"
+#root parameter gen
+rootp=$(findmnt -n -o SOURCE /) #/dev/mmcblk1p4 or similar
 
-  #root parameter gen
-  rootp=$(findmnt -n -o SOURCE /) #/dev/mmcblk1p4 or similar
+if [ "$(lsblk -no LABEL ${rootp})" != "" ];then 
+  echo using Label as root itentifier
+  rootp="LABEL=$(lsblk -no LABEL ${rootp})"
+else 
+  echo using UUID as root itentifier
+  rootp="UUID=$(lsblk -no UUID ${rootp})"
+fi
 
-  if [ "$(lsblk -no LABEL ${rootp})" != "" ];then 
-    echo using Label as root itentifier
-    rootp="LABEL=$(lsblk -no LABEL ${rootp})"
-  else 
-    echo using UUID as root itentifier
-    rootp="UUID=$(lsblk -no UUID ${rootp})"
-  fi
+echo root partition detected : $rootp
 
-  echo $rootp
 
-  # -n prevents echo from adding new line at the end
-  echo -n "console=tty1 root=${rootp} rootwait ro fsck.fix=yes fsck.repair=yes net.ifnames=0 ipv6.disable=1 quiet splash" > cmdline
+#fallback to generated/old cmdline
+if [[ ! -f cmdline-custom ]] && [[ ! -f "cmdline-${kver}" ]]; then
+
+  if [ -f cmdline ];then
+    echo migrating old cmdline
+    mv cmdline cmdline-custom
   
-  #cbq requires additional cmdline
-  if echo "$kver" | grep -q "cbq"; then
-    echo "there is cbq"
-    echo -n " deferred_probe_timeout=30 clk_ignore_unused=1" >> cmdline
+  else
+    echo "cmdline seams to be missing"
+    echo "Note. will create one for you"
+
+    # -n prevents echo from adding new line at the end
+    echo -n "console=tty1 rootwait ro fsck.fix=yes fsck.repair=yes net.ifnames=0 ipv6.disable=1 quiet splash" > cmdline-custom
+    
+    #cbq requires additional cmdline
+    if echo "$kver" | grep -q "cbq"; then
+      echo "there is cbq"
+      echo -n " deferred_probe_timeout=30 clk_ignore_unused=1" >> cmdline-custom
+    fi
+
   fi
-
-
-  cat cmdline
 
 fi
+
+#generating final cmdline
+echo
+echo -n "${rootp} " > cmdline;
+
+if [ -f cmdline-custom ];then
+  echo -n "$(cat cmdline-custom) " >> cmdline;
+fi
+
+if [ -f cmdline-${kver} ];then
+  echo -n "$(cat cmdline-${kver}) " >> cmdline;
+fi
+
+echo -n "cmdline used : "
+cat cmdline
+echo
+sleep 5
 
 #generating required files
 if [ -f "vmlinux.kpart-initrd-${kver}" ]; then #if it's not present the command would throw out of memory error
@@ -113,10 +137,10 @@ else
 fi
 
 vbutil_kernel --pack vmlinux.kpart --keyblock /usr/share/vboot/devkeys/kernel.keyblock --signprivate /usr/share/vboot/devkeys/kernel_data_key.vbprivk --version 1 --config cmdline --bootloader bootloader.bin --vmlinuz kernel.itb --arch arm
-cp -v vmlinux.kpart "/boot/vmlinux.kpart-initrd-${kver}" || out_of_memory
+mv -v vmlinux.kpart "/boot/vmlinux.kpart-initrd-${kver}" || out_of_memory
 
 #cleanning up
-rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart
+rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart cmdline
 
 
 #final output
