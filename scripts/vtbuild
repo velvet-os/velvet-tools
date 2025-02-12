@@ -72,7 +72,7 @@ fi
 
 #generating final cmdline
 echo
-echo -n "${rootp} " > cmdline;
+echo -n "root=${rootp} " > cmdline;
 
 if [ -f cmdline-custom ];then
   echo -n "$(cat cmdline-custom) " >> cmdline;
@@ -85,6 +85,7 @@ fi
 echo -n "cmdline used : "
 cat cmdline
 echo
+#check out the cmdline
 sleep 5
 
 #generating required files
