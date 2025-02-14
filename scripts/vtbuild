@@ -74,12 +74,12 @@ fi
 echo
 echo -n "root=${rootp} " > cmdline;
 
-if [ -f cmdline-custom ];then
-  echo -n "$(cat cmdline-custom) " >> cmdline;
-fi
-
 if [ -f cmdline-${kver} ];then
   echo -n "$(cat cmdline-${kver}) " >> cmdline;
+fi
+
+if [ -f cmdline-custom ];then
+  echo -n "$(cat cmdline-custom) " >> cmdline;
 fi
 
 echo -n "cmdline used : "
