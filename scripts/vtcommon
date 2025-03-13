@@ -54,7 +54,7 @@ save_pwd(){
 
 restor_pwd(){
     if [ "$oldpwd" != "" ]; then
-        cd $oldpwd
+        cd "$oldpwd"
     fi
 }
 
