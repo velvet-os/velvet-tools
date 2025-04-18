@@ -87,7 +87,7 @@ fdisk "$TARGET" << EOF
 n
 3
 
-+512M
++1024M
 t
 3
 20
