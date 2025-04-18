@@ -105,3 +105,26 @@ _vt_help_completion() {
 }
 
 complete -F _vt_help_completion vthelp
+
+
+install_root_device(){
+    lsblk --raw -d -no PKNAME $(findmnt / --raw -no SOURCE)
+}
+
+install_valid_devices(){
+    lsblk -d --raw -no NAME | grep -v mtd | grep -v $(install_root_device) | grep -v boot
+}
+
+_vt_install_completion() {
+    local curr_arg="${COMP_WORDS[COMP_CWORD]}"
+
+    local options=""
+
+    if [ "$COMP_CWORD" == "1" ];then
+        options="$(install_valid_devices | tr '\n' ' ')"
+    fi
+
+    COMPREPLY=($(compgen -W "$options" -- "$curr_arg"))
+}
+
+complete -F _vt_install_completion vtinstall
