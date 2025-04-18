@@ -1,0 +1,130 @@
+#!/bin/bash
+source $(dirname $BASH_SOURCE)/vtcommon
+
+DEVICE="$1"
+TARGET="/dev/$1"
+
+#setting SHUT environment variable will disable all useless data and prompt
+#this is only recommended for a wraper around the script
+
+set -e #exit on error
+
+root_device(){
+    lsblk --raw -d -no PKNAME $(findmnt / --raw -no SOURCE)
+}
+
+valid_devices(){
+    lsblk -d --raw -no NAME | grep -v mtd | grep -v $(root_device) | grep -v boot
+}
+
+# List valid devices if no argument
+if [ "$1" == "" ];then
+    if [ "$SHUT" == "" ];then
+        echo "Possible installation devices:" 
+    fi
+
+    valid_devices
+    #filter out block devices which might not be a good place to install a system
+    exit 0
+fi
+
+# Validating the device
+if [ ! -e "$TARGET" ]; then
+    echo "/$TARGET doesn't exist"
+    exit 0
+fi
+
+if [ "$(valid_devices | grep "$DEVICE")" == "" ];then
+    echo "the device is not a valid device"
+    echo "this might be a partition"
+    exit 0
+fi
+
+
+
+# Begin installation
+need_root
+
+if [ "$SHUT" == "" ];then
+    echo "the selected device $TARGET is going to be wiped"
+    echo "this operation CANNOT BE UNDONE."
+    echo "if you have any sensitive data present on this device"
+    echo "please back it up before proceeding"
+    echo
+    echo "would you like to continue?"
+    need_confirmation 
+fi
+
+echo "[info] wipe partition table"
+sgdisk -Z "$TARGET"
+partprobe "$TARGET"
+sgdisk -C -e -G "$TARGET"
+partprobe "$TARGET"
+echo "[info] create a new one"
+cgpt create "$TARGET"
+
+echo "[info] create kernel Partitions"
+cgpt add -i 1 -t kernel -b 8192 -s 262144 -l KernelA -S 1 -T 2 -P 10 "$TARGET"
+cgpt add -i 2 -t kernel -b 270336 -s 262144 -l KernelB -S 0 -T 2 -P 5 "$TARGET"
+
+echo "[info] create other partitions"
+fdisk "$TARGET" <EOF
+n
+3
+
++512M
+t
+3
+20
+n
+4
+
+
+t
+4
+20
+x
+A
+3
+p
+r
+p
+w
+EOF
+
+echo "[info]unmount /mnt just in case"
+umount /mnt/boot /mnt
+
+echo "[info] create/mount file system"
+
+#get partiton like /dev/sda or /dev/mmcblk1p
+TARGET_PART="/dev/$(lsblk --raw -no NAME $TARGET | sed -n '2 p' | sed 's/[0-9]*$//')"
+
+echo TARGET_PART=\"$TARGET_PART\"
+
+mkfs -t ext4 -O ^has_journal -m 0 -L bootemmc ${TARGET_PART}3
+mkfs -t btrfs -m single -L rootemmc ${TARGET_PART}4
+mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}4 /mnt
+mkdir -p /mnt/boot
+mount ${TARGET_PART}3 /mnt/boot
+
+echo "[info] copy over filesystem"
+rsync -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot
+rsync -axADHSX --no-inc-recursive --delete --exclude='/swap/*' / /mnt
+
+echo "[info] build kernel partition"
+CUSTOM_ROOT_DEVICE="$TARGET" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
+
+get_kver
+
+
+rm /mnt/boot/vmlinux.kpart-initrd-* #flashing other kernel version from previous install will guarantee unbootable system
+mv /boot/install-vmlinux.kpart-initrd-${kver} /mnt/boot/vmlinux.kpart-initrd-${kver} -v
+
+echo "[info] flashing kernel partition"
+dd if=/mnt/boot/vmlinux.kpart-initrd-${kver} of=${TARGET_PART}1 bs=1024k status=progress
+
+echo "[info] adjust fstab"
+sed -i 's,bootpart,bootemmc,g;s,rootpart,rootemmc,g' /mnt/etc/fstab
+echo "[info] umount partitions"
+umount /mnt/boot /mnt
