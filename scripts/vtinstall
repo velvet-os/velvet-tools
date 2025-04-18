@@ -4,6 +4,15 @@ source $(dirname $BASH_SOURCE)/vtcommon
 DEVICE="$1"
 TARGET="/dev/$1"
 
+if [ "$1" == "shut" ];then
+    SHUT=yes
+    DEVICE=""
+fi
+
+if [ "$2" == "shut" ];then
+    SHUT=yes
+fi
+
 #setting SHUT environment variable will disable all useless data and prompt
 #this is only recommended for a wraper around the script
 
@@ -18,7 +27,7 @@ valid_devices(){
 }
 
 # List valid devices if no argument
-if [ "$1" == "" ];then
+if [ "$DEVICE" == "" ];then
     if [ "$SHUT" == "" ];then
         echo "Possible installation devices:" 
     fi
@@ -30,7 +39,7 @@ fi
 
 # Validating the device
 if [ ! -e "$TARGET" ]; then
-    echo "/$TARGET doesn't exist"
+    echo "$TARGET doesn't exist"
     exit 0
 fi
 
@@ -45,7 +54,7 @@ fi
 # Begin installation
 need_root
 
-if [ "$SHUT" == "" ];then
+if [ "${SHUT}" == "" ];then
     echo "the selected device $TARGET is going to be wiped"
     echo "this operation CANNOT BE UNDONE."
     echo "if you have any sensitive data present on this device"
@@ -54,6 +63,8 @@ if [ "$SHUT" == "" ];then
     echo "would you like to continue?"
     need_confirmation 
 fi
+
+exit
 
 echo "[info] unmounting all partitions of target"
 if [ "$(lsblk --raw -no MOUNTPOINTS $TARGET | tr '\n' ' ' | tr -d ' ')" != "" ];then
