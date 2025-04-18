@@ -55,6 +55,9 @@ if [ "$SHUT" == "" ];then
     need_confirmation 
 fi
 
+echo "[info] unmounting all partitions of target"
+umount $(lsblk --raw -no MOUNTPOINTS $TARGET | tr '\n' ' ') #sed didn't work but tr seams to also be unix core util
+
 echo "[info] wipe partition table"
 sgdisk -Z "$TARGET"
 partprobe "$TARGET"
