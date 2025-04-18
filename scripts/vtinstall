@@ -99,6 +99,8 @@ w
 EOF
 } > /dev/null #only report issue
 
+partprobe $TARGET
+
 lsblk $TARGET
 
 echo "[info] create/mount file system"
@@ -108,8 +110,8 @@ TARGET_PART="/dev/$(lsblk --raw -no NAME $TARGET | sed -n '2 p' | sed 's/[0-9]*$
 
 echo TARGET_PART=\"$TARGET_PART\"
 
-mkfs -t ext4 -O ^has_journal -m 0 -L bootemmc ${TARGET_PART}3
-mkfs -t btrfs -m single -L rootemmc ${TARGET_PART}4
+mkfs -t ext4 -O ^has_journal -m 0 -L bootemmc -F ${TARGET_PART}3
+mkfs -t btrfs -m single -L rootemmc -f ${TARGET_PART}4
 mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}4 /mnt
 mkdir -p /mnt/boot
 mount ${TARGET_PART}3 /mnt/boot
@@ -129,6 +131,9 @@ mv /boot/install-vmlinux.kpart-initrd-${kver} /mnt/boot/vmlinux.kpart-initrd-${k
 
 echo "[info] flashing kernel partition"
 dd if=/mnt/boot/vmlinux.kpart-initrd-${kver} of=${TARGET_PART}1 bs=1024k status=progress
+
+echo "[info] synchronizing device"
+sync
 
 echo "[info] adjust fstab"
 sed -i 's,bootpart,bootemmc,g;s,rootpart,rootemmc,g' /mnt/etc/fstab
