@@ -128,8 +128,8 @@ mkdir -p /mnt/boot
 mount ${TARGET_PART}3 /mnt/boot
 
 echo "[info] copy over filesystem"
-rsync -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot || true #sometimes files like to vanish
-rsync -axADHSX --no-inc-recursive --delete --exclude='/swap/*' / /mnt || true
+rsync --info=name -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot || true #sometimes files like to vanish
+rsync --info=name -axADHSX --no-inc-recursive --delete --exclude='/swap/*' / /mnt || true
 
 echo "[info] build kernel partition"
 echo CUSTOM_ROOT_DEVICE=\"${TARGET_PART}4\" NO_FLASH=\"yes\" CUSTOM_PREFIX=\"install-\" $(dirname $BASH_SOURCE)/vtbuild
