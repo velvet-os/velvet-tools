@@ -80,13 +80,14 @@ fi
 
 get_root_parameter(){
   ROOT_DEVICE=$1
+  echo ROOT_DEVICE=$ROOT_DEVICE
 
-  if [ "$(lsblk -no LABEL ${rootp})" != "" ];then 
+  if [ "$(lsblk -no LABEL ${ROOT_DEVICE})" != "" ];then 
     echo using Label as root itentifier
-    ROOT_PAREMETER="root=LABEL=$(lsblk -no LABEL ${ROOT_DEVICE})"
-  elif [ "$(lsblk -no UUID ${rootp})" != "" ];then
+    ROOT_PAREMETER="root=LABEL=$(lsblk -d -no LABEL ${ROOT_DEVICE})"
+  elif [ "$(lsblk -no UUID ${ROOT_DEVICE})" != "" ];then
     echo using UUID as root itentifier
-    ROOT_PAREMETER="root=UUID=$(lsblk -no UUID ${ROOT_DEVICE})"
+    ROOT_PAREMETER="root=UUID=$(lsblk -d -no UUID ${ROOT_DEVICE})"
   else
     echo WARNING. the script was unable to determin parittion lable or uuid of the device
     echo since CUSTOM_ROOT_PARAMETER was not provide

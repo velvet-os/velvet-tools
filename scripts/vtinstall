@@ -112,6 +112,8 @@ echo TARGET_PART=\"$TARGET_PART\"
 
 mkfs -t ext4 -O ^has_journal -m 0 -L bootemmc -F ${TARGET_PART}3
 mkfs -t btrfs -m single -L rootemmc -f ${TARGET_PART}4
+partprobe $TARGET
+
 mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}4 /mnt
 mkdir -p /mnt/boot
 mount ${TARGET_PART}3 /mnt/boot
@@ -121,7 +123,8 @@ rsync -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot
 rsync -axADHSX --no-inc-recursive --delete --exclude='/swap/*' / /mnt
 
 echo "[info] build kernel partition"
-CUSTOM_ROOT_DEVICE="$TARGET" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
+echo CUSTOM_ROOT_DEVICE=\"${TARGET_PART}4\" NO_FLASH=\"yes\" CUSTOM_PREFIX=\"install-\" $(dirname $BASH_SOURCE)/vtbuild
+CUSTOM_ROOT_DEVICE="${TARGET_PART}4" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
 
 get_kver
 
