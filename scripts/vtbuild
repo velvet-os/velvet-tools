@@ -1,4 +1,25 @@
 #!/bin/bash
+set -e #exit on error
+
+if [[ $1 == "help" ]] || [[ $1 == "-h" ]] || [[ $1 == "--help" ]];then
+
+  echo usage vtbuild \<kernel version\>
+
+  echo available environment variables
+  echo
+  echo CUSTOM_PARAMETER=\"\" custom parameters to be appended
+  echo
+  echo CUSTOM_ROOT_DEVICE=\"\" specify custom root device
+  echo CUSTOM_ROOT_PARAMETER=\"\" direcly specify root kernel parameter \(has priority over custom root\)
+  echo example: \"root=LABEL=name\" \"root=UUID=uuid\" \"root=/dev/sdx\"
+  echo
+  echo NO_FLASH= any value other than empty prevents automatic/forced flashing
+  echo
+  echo CUSTOM_PREFIX="" prefix to be added to image name
+  echo CUSTOM_SUFFIX="" suffix to be added to image name
+  exit
+
+fi
 
 source $(dirname $BASH_SOURCE)/vtcommon
 
@@ -9,7 +30,7 @@ save_pwd
 cd /boot
 
 # choosing kernel version
-get_kver ${1}
+get_kver "${1}"
 
 #it is better to regenerate initramfs everytime
 if [ ! -f "initrd.img-${kver}" ]; then
@@ -31,19 +52,6 @@ if [ ! -f "initrd.img-${kver}" ]; then
   echo "sorry. unable to generate initramfs TwT"
   exit 1
 fi
-
-#root parameter gen
-rootp=$(findmnt -n -o SOURCE /) #/dev/mmcblk1p4 or similar
-
-if [ "$(lsblk -no LABEL ${rootp})" != "" ];then 
-  echo using Label as root itentifier
-  rootp="LABEL=$(lsblk -no LABEL ${rootp})"
-else 
-  echo using UUID as root itentifier
-  rootp="UUID=$(lsblk -no UUID ${rootp})"
-fi
-
-echo root partition detected : $rootp
 
 
 #fallback to generated/old cmdline
@@ -70,9 +78,44 @@ if [[ ! -f cmdline-custom ]] && [[ ! -f "cmdline-${kver}" ]]; then
 
 fi
 
+get_root_parameter(){
+  ROOT_DEVICE=$1
+
+  if [ "$(lsblk -no LABEL ${rootp})" != "" ];then 
+    echo using Label as root itentifier
+    ROOT_PAREMETER="root=LABEL=$(lsblk -no LABEL ${ROOT_DEVICE})"
+  elif [ "$(lsblk -no UUID ${rootp})" != "" ];then
+    echo using UUID as root itentifier
+    ROOT_PAREMETER="root=UUID=$(lsblk -no UUID ${ROOT_DEVICE})"
+  else
+    echo WARNING. the script was unable to determin parittion lable or uuid of the device
+    echo since CUSTOM_ROOT_PARAMETER was not provide
+    echo the script will default to device absolute path as root instead which is NOT RELIABLE
+
+    ROOT_PAREMETER="root=$ROOT_DEVICE"
+    sleep 10
+  fi
+}
+
+#root parameter gen
+if [ "${CUSTOM_ROOT_PARAMETER}" != "" ];then
+  ROOT_PAREMETER="${CUSTOM_ROOT_PARAMETER}"
+elif [ "${CUSTOM_ROOT_DEVICE}" != "" ];then
+  get_root_parameter "${CUSTOM_ROOT_DEVICE}"
+elif [ "$(findmnt -n -o SOURCE /)" != "" ];then
+  get_root_parameter "$(findmnt -n -o SOURCE /)" #/dev/mmcblk1p4 or similar
+else
+  echo ERROR. unable to detect root device
+  echo this may occure under incorrectly setup chroot
+  echo aborting the build process
+
+  exit 2
+fi
+
+
 #generating final cmdline
 echo
-echo -n "root=${rootp} " > cmdline;
+echo -n "${ROOT_PAREMETER} " > cmdline;
 
 if [ -f cmdline-${kver} ];then
   echo -n "$(cat cmdline-${kver}) " >> cmdline;
@@ -81,6 +124,8 @@ fi
 if [ -f cmdline-custom ];then
   echo -n "$(cat cmdline-custom) " >> cmdline;
 fi
+
+echo -n " ${CUSTOM_PARAMETER}" >> cmdline
 
 echo -n "cmdline used : "
 cat cmdline
@@ -138,7 +183,7 @@ else
 fi
 
 vbutil_kernel --pack vmlinux.kpart --keyblock /usr/share/vboot/devkeys/kernel.keyblock --signprivate /usr/share/vboot/devkeys/kernel_data_key.vbprivk --version 1 --config cmdline --bootloader bootloader.bin --vmlinuz kernel.itb --arch arm
-mv -v vmlinux.kpart "/boot/vmlinux.kpart-initrd-${kver}" || out_of_memory
+mv -v vmlinux.kpart "/boot/${CUSTOM_PREFIX}vmlinux.kpart-initrd-${kver}${CUSTOM_SUFFIX}" || out_of_memory
 
 #cleanning up
 rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart cmdline
@@ -147,10 +192,14 @@ rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart cmd
 #final output
 
 #printing results
-echo image put inside /boot/vmlinux.kpart-initrd-${kver}
+echo image put inside "/boot/${CUSTOM_PREFIX}vmlinux.kpart-initrd-${kver}${CUSTOM_SUFFIX}"
 
 #returns to previous directory
 restor_pwd
+
+if [ "${NO_FLASH}" != "" ]; then
+  exit 0
+fi
 
 #auto flashing
 load_config
