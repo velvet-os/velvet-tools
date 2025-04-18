@@ -64,8 +64,6 @@ if [ "${SHUT}" == "" ];then
     need_confirmation 
 fi
 
-exit
-
 echo "[info] unmounting all partitions of target"
 if [ "$(lsblk --raw -no MOUNTPOINTS $TARGET | tr '\n' ' ' | tr -d ' ')" != "" ];then
     umount $(lsblk --raw -no MOUNTPOINTS $TARGET | tr '\n' ' ') #sed didn't work but tr seams to also be unix core util
