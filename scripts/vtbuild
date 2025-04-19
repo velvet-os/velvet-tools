@@ -197,6 +197,7 @@ mv -v vmlinux.kpart "/boot/${CUSTOM_PREFIX}vmlinux.kpart-initrd-${kver}${CUSTOM_
 
 #cleanning up
 rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart cmdline
+cd ..
 rmdir $WORKING_DIR
 
 
