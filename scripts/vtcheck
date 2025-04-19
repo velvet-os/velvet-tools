@@ -7,7 +7,7 @@ need_root
 get_kver
 
 if [ ! -f "/boot/hash-${kver}" ];then
-    echo hash to check against
+    echo no hash to check against
     exit 0
 fi
 
