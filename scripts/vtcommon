@@ -89,3 +89,13 @@ load_config(){
         init_gen_hook=y
     fi
 }
+
+get_kparam(){
+    PARAM=$1
+    cat /proc/cmdline | tr ' ' '\n' | grep "$PARAM" | sed "s/${PARAM}=//"
+}
+
+hash_file(){
+    FILE=$1
+    md5sum $FILE | cut -c -32 -n
+}

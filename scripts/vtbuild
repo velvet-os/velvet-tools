@@ -126,10 +126,19 @@ if [ -f cmdline-custom ];then
   echo -n "$(cat cmdline-custom) " >> cmdline;
 fi
 
-echo -n " ${CUSTOM_PARAMETER}" >> cmdline
+#custom parameter
+if [ "${CUSTOM_PARAMETER}" != "" ];then
+  echo -n " ${CUSTOM_PARAMETER}" >> cmdline
+fi
+
+#kernel hash
+KERNEL_HASH="$(hash_file cmdline)$(hash_file vmlinux.kpart-initrd-${kver})"
+
+echo -n " KERNEL_HASH=${KERNEL_HASH}" >> cmdline
 
 echo -n "cmdline used : "
 cat cmdline
+
 echo
 #check out the cmdline
 sleep 5
@@ -194,6 +203,12 @@ rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart cmd
 
 #printing results
 echo image put inside "/boot/${CUSTOM_PREFIX}vmlinux.kpart-initrd-${kver}${CUSTOM_SUFFIX}"
+
+if [ "$CUSTOM_PREFIX" != "" ] || [ "$CUSTOM_SUFFIX" != "" ];then
+  exit
+fi
+
+echo $KERNEL_HASH > /boot/hash-${kver}
 
 #returns to previous directory
 restor_pwd

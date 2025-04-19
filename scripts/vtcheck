@@ -4,13 +4,21 @@ source $(dirname $BASH_SOURCE)/vtcommon
 
 need_root
 
-if [ ! -f /etc/velvettools/testing ];then
-    echo nothing to check
+get_kver
+
+if [ ! -f "/boot/hash-${kver}" ];then
+    echo hash to check against
     exit 0
 fi
 
-if [ "$(cat /etc/velvettools/testing)" == "$(uname -r)" ];then
+echo "file:$(cat /boot/hash-${kver})"
+echo "kernel:$(get_kparam KERNEL_HASH)"
+
+if [ "$(cat /boot/hash-${kver})" == "$(get_kparam KERNEL_HASH)" ];then
+    echo hash match
+    rm /boot/hash-${kver}
     vtflash $(uname -r) yes
+    exit
 fi
 
-rm /etc/velvettools/testing
+echo hash miss match

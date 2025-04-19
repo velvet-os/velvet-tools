@@ -3,7 +3,7 @@ Description=checks if linux versions switch went well
 After=network.target
 
 [Service]
-ExecStart=/usr/local/bin/vtcheck
+ExecStart=/usr/bin/vtcheck
 Type=oneshot
 RemainAfterExit=true
 
