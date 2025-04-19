@@ -26,10 +26,20 @@ valid_devices(){
     lsblk -d --raw -no NAME | grep -v mtd | grep -v $(root_device) | grep -v boot
 }
 
+valid_devices_ex(){
+    lsblk -d --raw -no NAME,SIZE | grep -v mtd | grep -v $(root_device) | grep -v boot
+}
+
 # List valid devices if no argument
 if [ "$DEVICE" == "" ];then
     if [ "$SHUT" == "" ];then
-        echo "Possible installation devices:" 
+        if [ "$(valid_devices_ex)" == "" ];then
+            echo "no possible installation devices"
+            exit 0
+        fi
+        echo "Possible installation devices:"
+        valid_devices_ex
+        exit 0
     fi
 
     valid_devices
