@@ -25,15 +25,11 @@ source $(dirname $BASH_SOURCE)/vtcommon
 
 need_root
 
-#saves current directory
-save_pwd
-cd /boot
-
 # choosing kernel version
 get_kver "${1}"
 
 #it is better to regenerate initramfs everytime
-if [ ! -f "initrd.img-${kver}" ]; then
+if [ ! -f "/boot/initrd.img-${kver}" ]; then
   
   touch /boot/norebuild #prevents initramfs from running vtbuild again
 
@@ -48,35 +44,39 @@ if [ ! -f "initrd.img-${kver}" ]; then
   rm /boot/norebuild 2> /dev/null
 fi
 
-if [ ! -f "initrd.img-${kver}" ]; then
+if [ ! -f "/boot/initrd.img-${kver}" ]; then
   echo "sorry. unable to generate initramfs TwT"
   exit 1
 fi
 
 
 #fallback to generated/old cmdline
-if [[ ! -f cmdline-custom ]] && [[ ! -f "cmdline-${kver}" ]]; then
+if [[ ! -f /boot/cmdline-custom ]] && [[ ! -f "/boot/cmdline-${kver}" ]]; then
 
-  if [ -f cmdline ];then
+  if [ -f /boot/cmdline ];then
     echo migrating old cmdline
-    mv cmdline cmdline-custom
+    mv /boot/cmdline /boot/cmdline-custom
   
   else
     echo "cmdline seams to be missing"
     echo "Note. will create one for you"
 
     # -n prevents echo from adding new line at the end
-    echo -n "console=tty1 rootwait ro fsck.fix=yes fsck.repair=yes net.ifnames=0 ipv6.disable=1 quiet splash" > cmdline-custom
+    echo -n "console=tty1 rootwait ro fsck.fix=yes fsck.repair=yes net.ifnames=0 ipv6.disable=1 quiet splash" > /boot/cmdline-custom
     
     #cbq requires additional cmdline
     if echo "$kver" | grep -q "cbq"; then
       echo "there is cbq"
-      echo -n " deferred_probe_timeout=30 clk_ignore_unused=1" >> cmdline-custom
+      echo -n " deferred_probe_timeout=30 clk_ignore_unused=1" >> /boot/cmdline-custom
     fi
 
   fi
-
 fi
+
+#move to remporary directory
+WORKING_DIR="$(mktemp -d | tr -d '\n')"
+cd $WORKING_DIR
+echo WORKING_DIR=\"${WORKING_DIR}\"
 
 get_root_parameter(){
   ROOT_DEVICE=$1
@@ -118,12 +118,12 @@ fi
 echo
 echo -n "${ROOT_PAREMETER} " > cmdline;
 
-if [ -f cmdline-${kver} ];then
-  echo -n "$(cat cmdline-${kver}) " >> cmdline;
+if [ -f /boot/cmdline-${kver} ];then
+  echo -n "$(cat /boot/cmdline-${kver}) " >> cmdline;
 fi
 
-if [ -f cmdline-custom ];then
-  echo -n "$(cat cmdline-custom) " >> cmdline;
+if [ -f /boot/cmdline-custom ];then
+  echo -n "$(cat /boot/cmdline-custom) " >> cmdline;
 fi
 
 #custom parameter
@@ -132,7 +132,7 @@ if [ "${CUSTOM_PARAMETER}" != "" ];then
 fi
 
 #kernel hash
-KERNEL_HASH="$(hash_file cmdline)$(hash_file vmlinux.kpart-initrd-${kver})"
+KERNEL_HASH="$(hash_file cmdline)$(hash_file /boot/vmlinux.kpart-initrd-${kver})"
 
 echo -n " KERNEL_HASH=${KERNEL_HASH}" >> cmdline
 
@@ -144,12 +144,12 @@ echo
 sleep 5
 
 #generating required files
-if [ -f "vmlinux.kpart-initrd-${kver}" ]; then #if it's not present the command would throw out of memory error
-  cp -v "vmlinux.kpart-initrd-${kver}" "vmlinux.kpart-initrd-${kver}.old" 2> /dev/null || out_of_memory
+if [ -f "/boot/vmlinux.kpart-initrd-${kver}" ] && [ "${CUSTOM_PREFIX}${CUSTOM_SUFFIX}" == "" ]; then #if it's not present the command would throw out of memory error
+  cp -v "/boot/vmlinux.kpart-initrd-${kver}" "/boot/vmlinux.kpart-initrd-${kver}.old" 2> /dev/null || out_of_memory
 fi
-cp "Image-${kver}" Image || out_of_memory
+cp "/boot/Image-${kver}" Image || out_of_memory
 lzma -9 -z -f -k -v Image || out_of_memory
-cp "initrd.img-${kver}" initrd.img.xz || out_of_memory
+cp "/boot/initrd.img-${kver}" initrd.img.xz || out_of_memory
 
 #moved cmdline to seperate file to make it cleaner to edit
 # for cbq add: deferred_probe_timeout=30 clk_ignore_unused=1
@@ -183,13 +183,13 @@ if [ "$dtbs_file" != "" ] && [ "$(cat $dtbs_file)" == "" ]; then
 fi
 
 if [ "$dtbs_file" == "" ]; then
-  ls dtb-${kver}/*.dtb | xargs printf " -b %s" | xargs mkimage -D "-I dts -O dtb -p 2048" -f auto -A arm64 -O linux -T kernel -C lzma -a 0 -d Image.lzma -i initrd.img.xz kernel.itb || out_of_memory
+  ls /boot/dtb-${kver}/*.dtb | xargs printf " -b %s" | xargs mkimage -D "-I dts -O dtb -p 2048" -f auto -A arm64 -O linux -T kernel -C lzma -a 0 -d Image.lzma -i initrd.img.xz kernel.itb || out_of_memory
 else
   echo going with $dtbs_file
   echo "the dtbs picked :"
 
-  ls dtb-${kver}/$(cat $dtbs_file)
-  ls dtb-${kver}/$(cat $dtbs_file) | xargs printf " -b %s" | xargs mkimage -D "-I dts -O dtb -p 2048" -f auto -A arm64 -O linux -T kernel -C lzma -a 0 -d Image.lzma -i initrd.img.xz kernel.itb || out_of_memory
+  ls /boot/dtb-${kver}/$(cat $dtbs_file)
+  ls /boot/dtb-${kver}/$(cat $dtbs_file) | xargs printf " -b %s" | xargs mkimage -D "-I dts -O dtb -p 2048" -f auto -A arm64 -O linux -T kernel -C lzma -a 0 -d Image.lzma -i initrd.img.xz kernel.itb || out_of_memory
 fi
 
 vbutil_kernel --pack vmlinux.kpart --keyblock /usr/share/vboot/devkeys/kernel.keyblock --signprivate /usr/share/vboot/devkeys/kernel_data_key.vbprivk --version 1 --config cmdline --bootloader bootloader.bin --vmlinuz kernel.itb --arch arm
@@ -197,6 +197,7 @@ mv -v vmlinux.kpart "/boot/${CUSTOM_PREFIX}vmlinux.kpart-initrd-${kver}${CUSTOM_
 
 #cleanning up
 rm -f Image Image.lzma initrd.img.xz bootloader.bin kernel.itb vmlinux.kpart cmdline
+rmdir $WORKING_DIR
 
 
 #final output
@@ -209,9 +210,6 @@ if [ "$CUSTOM_PREFIX" != "" ] || [ "$CUSTOM_SUFFIX" != "" ];then
 fi
 
 echo $KERNEL_HASH > /boot/hash-${kver}
-
-#returns to previous directory
-restor_pwd
 
 if [ "${NO_FLASH}" != "" ]; then
   exit 0
