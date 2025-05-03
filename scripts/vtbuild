@@ -132,7 +132,7 @@ if [ "${CUSTOM_PARAMETER}" != "" ];then
 fi
 
 #kernel hash
-KERNEL_HASH="$(hash_file cmdline)$(hash_file /boot/vmlinux.kpart-initrd-${kver})"
+KERNEL_HASH="$(hash_file cmdline)$(hash_file /boot/initrd.img-${kver})"
 
 echo -n " KERNEL_HASH=${KERNEL_HASH}" >> cmdline
 
