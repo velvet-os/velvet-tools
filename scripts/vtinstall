@@ -1,16 +1,35 @@
 #!/bin/bash
 source $(dirname $BASH_SOURCE)/vtcommon
 
-DEVICE="$1"
-TARGET="/dev/$1"
+DEVICE=""
+TARGET=""
+SHUT=""
+USE_LUKS=""
 
-if [ "$1" == "shut" ];then
+# Parse arguments
+while [ $# -gt 0 ]; do
+    case "$1" in
+        --luks)
+            USE_LUKS=yes
+            ;;
+        shut)
+            SHUT=yes
+            ;;
+        *)
+            if [ "$DEVICE" == "" ]; then
+                DEVICE="$1"
+                TARGET="/dev/$1"
+            fi
+            ;;
+    esac
+    shift
+done
+
+# Handle legacy "shut" as first argument
+if [ "$DEVICE" == "shut" ]; then
     SHUT=yes
     DEVICE=""
-fi
-
-if [ "$2" == "shut" ];then
-    SHUT=yes
+    TARGET=""
 fi
 
 #setting SHUT environment variable will disable all useless data and prompt
@@ -39,6 +58,18 @@ if [ "$DEVICE" == "" ];then
         fi
         echo "Possible installation devices:"
         valid_devices_ex
+        echo
+        echo "Usage: vtinstall [--luks] <device> [shut]"
+        echo
+        echo "Options:"
+        echo "  --luks    Enable LUKS encryption on the root partition"
+        echo "  shut      Suppress prompts and verbose output"
+        echo
+        echo "Examples:"
+        echo "  vtinstall mmcblk0                 # Standard installation"
+        echo "  vtinstall --luks mmcblk0          # Installation with LUKS encryption"
+        echo "  vtinstall mmcblk0 shut            # Silent installation"
+        echo "  vtinstall --luks mmcblk0 shut     # Silent LUKS installation"
         exit 0
     fi
 
@@ -130,10 +161,30 @@ TARGET_PART="/dev/$(lsblk --raw -no NAME $TARGET | sed -n '2 p' | sed 's/[0-9]*$
 echo TARGET_PART=\"$TARGET_PART\"
 
 mkfs -t ext4 -O ^has_journal -m 0 -L bootemmc -F ${TARGET_PART}3
-mkfs -t btrfs -m single -L rootemmc -f ${TARGET_PART}4
-partprobe $TARGET
 
-mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}4 /mnt
+if [ "$USE_LUKS" == "yes" ]; then
+    echo "[info] setting up LUKS encryption on root partition"
+    
+    if [ "${SHUT}" == "" ];then
+        echo "LUKS encryption will be set up on the root partition."
+        echo "You will be prompted to enter a passphrase for the encryption."
+        echo "Please choose a strong passphrase and remember it!"
+        echo ""
+    fi
+    
+    cryptsetup luksFormat ${TARGET_PART}4
+    cryptsetup open --type luks ${TARGET_PART}4 encrypted
+    mkfs -t btrfs -m single -L rootemmc /dev/mapper/encrypted
+    mount -o ssd,compress-force=zstd,noatime,nodiratime /dev/mapper/encrypted /mnt
+
+else
+    mkfs -t btrfs -m single -L rootemmc -f ${TARGET_PART}4
+    mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}4 /mnt
+
+
+fi
+
+partprobe $TARGET
 mkdir -p /mnt/boot
 mount ${TARGET_PART}3 /mnt/boot
 
@@ -141,23 +192,84 @@ echo "[info] copy over filesystem"
 rsync --info=name -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot || true #sometimes files like to vanish
 rsync --info=name -axADHSX --no-inc-recursive --delete --exclude='/swap/*' / /mnt || true
 
-echo "[info] build kernel partition"
-echo CUSTOM_ROOT_DEVICE=\"${TARGET_PART}4\" NO_FLASH=\"yes\" CUSTOM_PREFIX=\"install-\" $(dirname $BASH_SOURCE)/vtbuild
-CUSTOM_ROOT_DEVICE="${TARGET_PART}4" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
+if [ "$USE_LUKS" == "yes" ]; then
+    echo "[info] configuring LUKS support in target system"
+    
+    # Ensure cryptsetup is available in target
+    if [ ! -f /mnt/usr/sbin/cryptsetup ]; then
+        echo "WARNING: cryptsetup not found in target system"
+        echo "LUKS boot will fail without cryptsetup installed"
+    fi
+    
+    # Configure crypttab for LUKS before initramfs generation
+    echo "[info] configure crypttab for LUKS"
+    
+    # Get the UUID of the encrypted partition
+    ENCRYPTED_UUID=$(blkid -s UUID -o value ${TARGET_PART}4)
+    
+    # Create/update crypttab
+    echo "encrypted UUID=${ENCRYPTED_UUID} none luks" > /mnt/etc/crypttab
+    
+    # Set up chroot environment for initramfs generation
+    echo "[info] setting up chroot environment"
+    mount --bind /dev /mnt/dev
+    mount --bind /proc /mnt/proc  
+    mount --bind /sys /mnt/sys
+    mount --bind /run /mnt/run
+    
+    get_kver
+    
+    echo "[info] build kernel partition"
+    # clean initramfs to force rebuild by vtbuild
+    rm  /mnt/boot/initrd.img-${kver}
+    chroot /mnt /bin/bash -c "/usr/bin/vtbuild"
+    
+    # Clean up chroot mounts
+    umount /mnt/run /mnt/sys /mnt/proc /mnt/dev
 
-get_kver
+    
+else
+    echo "[info] build kernel partition"
+    echo CUSTOM_ROOT_DEVICE=\"${TARGET_PART}4\" NO_FLASH=\"yes\" CUSTOM_PREFIX=\"install-\" $(dirname $BASH_SOURCE)/vtbuild
+    CUSTOM_ROOT_DEVICE="${TARGET_PART}4" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
+    
+    get_kver
 
 
-rm /mnt/boot/vmlinux.kpart-initrd-* #flashing other kernel version from previous install will guarantee unbootable system
-mv /boot/install-vmlinux.kpart-initrd-${kver} /mnt/boot/vmlinux.kpart-initrd-${kver} -v
+    rm /mnt/boot/vmlinux.kpart-initrd-* #flashing other kernel version from previous install will guarantee unbootable system
+    mv /boot/install-vmlinux.kpart-initrd-${kver} /mnt/boot/vmlinux.kpart-initrd-${kver} -v
 
-echo "[info] flashing kernel partition"
-dd if=/mnt/boot/vmlinux.kpart-initrd-${kver} of=${TARGET_PART}1 bs=1024k status=progress
+    echo "[info] flashing kernel partition"
+    dd if=/mnt/boot/vmlinux.kpart-initrd-${kver} of=${TARGET_PART}1 bs=1024k status=progress
+fi
+
 
 echo "[info] synchronizing device"
 sync
 
 echo "[info] adjust fstab"
 sed -i 's,bootpart,bootemmc,g;s,rootpart,rootemmc,g' /mnt/etc/fstab
+
+if [ "$USE_LUKS" == "yes" ]; then
+    # Update fstab to use the encrypted device
+    sed -i 's,LABEL=rootemmc,/dev/mapper/encrypted,g' /mnt/etc/fstab
+    
+  
+fi
+
 echo "[info] umount partitions"
 umount /mnt/boot /mnt
+
+if [ "$USE_LUKS" == "yes" ]; then
+  echo "[info] close LUKS device"
+  cryptsetup close encrypted
+fi
+
+if [ "$USE_LUKS" == "yes" ] && [ "${SHUT}" == "" ]; then
+    echo
+    echo "[info] LUKS installation completed successfully!"
+    echo "The root partition is now encrypted and the system is configured to"
+    echo "unlock it at boot time. You will be prompted for your passphrase"
+    echo "during boot. Make sure to remember your passphrase!"
+    echo
+fi
