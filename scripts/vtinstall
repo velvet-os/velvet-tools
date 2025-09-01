@@ -25,12 +25,6 @@ while [ $# -gt 0 ]; do
     shift
 done
 
-# Handle legacy "shut" as first argument
-if [ "$DEVICE" == "shut" ]; then
-    SHUT=yes
-    DEVICE=""
-    TARGET=""
-fi
 
 #setting SHUT environment variable will disable all useless data and prompt
 #this is only recommended for a wraper around the script
@@ -56,9 +50,7 @@ if [ "$DEVICE" == "" ];then
             echo "no possible installation devices"
             exit 0
         fi
-        echo "Possible installation devices:"
-        valid_devices_ex
-        echo
+
         echo "Usage: vtinstall [--luks] <device> [shut]"
         echo
         echo "Options:"
@@ -70,6 +62,10 @@ if [ "$DEVICE" == "" ];then
         echo "  vtinstall --luks mmcblk0          # Installation with LUKS encryption"
         echo "  vtinstall mmcblk0 shut            # Silent installation"
         echo "  vtinstall --luks mmcblk0 shut     # Silent LUKS installation"
+        echo
+        echo "Possible installation devices:"
+        valid_devices_ex
+        echo
         exit 0
     fi
 
