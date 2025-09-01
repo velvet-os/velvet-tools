@@ -189,13 +189,6 @@ rsync --info=name -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot || true 
 rsync --info=name -axADHSX --no-inc-recursive --delete --exclude='/swap/*' / /mnt || true
 
 if [ "$USE_LUKS" == "yes" ]; then
-    echo "[info] configuring LUKS support in target system"
-    
-    # Ensure cryptsetup is available in target
-    if [ ! -f /mnt/usr/sbin/cryptsetup ]; then
-        echo "WARNING: cryptsetup not found in target system"
-        echo "LUKS boot will fail without cryptsetup installed"
-    fi
     
     # Configure crypttab for LUKS before initramfs generation
     echo "[info] configure crypttab for LUKS"
