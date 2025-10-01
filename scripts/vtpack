@@ -37,7 +37,7 @@ make_deb(){
     done
 
     echo "this might take a while, be patient"
-    dpkg --build linux-${kver} --root-owner-group
+    dpkg-deb --root-owner-group --build linux-${kver}
 
     rm -rf linux-${kver}
 
