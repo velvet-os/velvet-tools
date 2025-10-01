@@ -3,6 +3,6 @@ touch /boot/norebuild
 
 update-initramfs -c -k VERSION
 
-rm /boot/norebuild 2> /dev/null
+rm /boot/norebuild 2> /dev/null | true
 
 exit 0
