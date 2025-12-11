@@ -5,12 +5,16 @@ DEVICE=""
 TARGET=""
 SHUT=""
 USE_LUKS=""
+NO_BOOT_PARTITION=""
 
 # Parse arguments
 while [ $# -gt 0 ]; do
     case "$1" in
         --luks)
             USE_LUKS=yes
+            ;;
+        --no-boot-partition)
+            NO_BOOT_PARTITION=yes
             ;;
         shut)
             SHUT=yes
@@ -55,6 +59,7 @@ if [ "$DEVICE" == "" ];then
         echo
         echo "Options:"
         echo "  --luks    Enable LUKS encryption on the root partition"
+        echo "  --no-boot-partition    Do not create a separate /boot partition"
         echo "  shut      Suppress prompts and verbose output"
         echo
         echo "Examples:"
@@ -117,10 +122,13 @@ cgpt create "$TARGET"
 echo "[info] create kernel Partitions"
 cgpt add -i 1 -t kernel -b 8192 -s 262144 -l KernelA -S 1 -T 2 -P 10 "$TARGET"
 cgpt add -i 2 -t kernel -b 270336 -s 262144 -l KernelB -S 0 -T 2 -P 5 "$TARGET"
-
-echo "[info] create other partitions"
-{
 fdisk --wipe-partitions always "$TARGET" << EOF
+if [ "$NO_BOOT_PARTITION" == "yes" ]; then
+    BOOT_PART_NUM=""
+    ROOT_PART_NUM="3"
+    echo "[info] create other partitions (single root)"
+    {
+
 n
 3
 
@@ -128,7 +136,35 @@ n
 p
 w
 EOF
-} > /dev/null #only report issue
+    } > /dev/null #only report issue
+else
+    BOOT_PART_NUM="3"
+    ROOT_PART_NUM="4"
+    echo "[info] create other partitions (boot + root)"
+    {
+3
+
++1024M
+t
+3
+20
+n
+4
+
+
+t
+4
+20
+x
+A
+3
+p
+r
+p
+w
+EOF
+    } > /dev/null #only report issue
+fi
 
 partprobe $TARGET
 
@@ -139,7 +175,9 @@ echo "[info] create/mount file system"
 #get partiton like /dev/sda or /dev/mmcblk1p
 TARGET_PART="/dev/$(lsblk --raw -no NAME $TARGET | sed -n '2 p' | sed 's/[0-9]*$//')"
 
-
+if [ "$NO_BOOT_PARTITION" == "" ]; then
+    mkfs -t ext4 -O ^has_journal -m 0 -L bootemmc -F ${TARGET_PART}${BOOT_PART_NUM}
+fi
 
 if [ "$USE_LUKS" == "yes" ]; then
     echo "[info] setting up LUKS encryption on root partition"
@@ -151,19 +189,24 @@ if [ "$USE_LUKS" == "yes" ]; then
         echo ""
     fi
     
-    cryptsetup luksFormat ${TARGET_PART}3
-    cryptsetup open --type luks ${TARGET_PART}3 encrypted
+    cryptsetup luksFormat ${TARGET_PART}${ROOT_PART_NUM}
+    cryptsetup open --type luks ${TARGET_PART}${ROOT_PART_NUM} encrypted
     mkfs -t btrfs -m single -L rootemmc /dev/mapper/encrypted
     mount -o ssd,compress-force=zstd,noatime,nodiratime /dev/mapper/encrypted /mnt
 
 else
-    mkfs -t btrfs -m single -L rootemmc -f ${TARGET_PART}3
-    mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}3 /mnt
+    mkfs -t btrfs -m single -L rootemmc -f ${TARGET_PART}${ROOT_PART_NUM}
+    mount -o ssd,compress-force=zstd,noatime,nodiratime ${TARGET_PART}${ROOT_PART_NUM} /mnt
 
 
 fi
 
 partprobe $TARGET
+
+if [ "$NO_BOOT_PARTITION" == "" ]; then
+    mkdir -p /mnt/boot
+    mount ${TARGET_PART}${BOOT_PART_NUM} /mnt/boot
+fi
 
 echo "[info] copy over filesystem"
 rsync --info=name -axADHSX --no-inc-recursive --delete /boot/ /mnt/boot || true #sometimes files like to vanish
@@ -175,7 +218,7 @@ if [ "$USE_LUKS" == "yes" ]; then
     echo "[info] configure crypttab for LUKS"
     
     # Get the UUID of the encrypted partition
-    ENCRYPTED_UUID=$(blkid -s UUID -o value ${TARGET_PART}3)
+    ENCRYPTED_UUID=$(blkid -s UUID -o value ${TARGET_PART}${ROOT_PART_NUM})
     
     # Create/update crypttab
     echo "encrypted UUID=${ENCRYPTED_UUID} none luks" > /mnt/etc/crypttab
@@ -200,8 +243,8 @@ if [ "$USE_LUKS" == "yes" ]; then
     
 else
     echo "[info] build kernel partition"
-    echo CUSTOM_ROOT_DEVICE=\"${TARGET_PART}3\" NO_FLASH=\"yes\" CUSTOM_PREFIX=\"install-\" $(dirname $BASH_SOURCE)/vtbuild
-    CUSTOM_ROOT_DEVICE="${TARGET_PART}3" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
+    echo CUSTOM_ROOT_DEVICE=\"${TARGET_PART}${ROOT_PART_NUM}\" NO_FLASH=\"yes\" CUSTOM_PREFIX=\"install-\" $(dirname $BASH_SOURCE)/vtbuild
+    CUSTOM_ROOT_DEVICE="${TARGET_PART}${ROOT_PART_NUM}" NO_FLASH="yes" CUSTOM_PREFIX="install-" $(dirname $BASH_SOURCE)/vtbuild
     
     get_kver
 
@@ -218,7 +261,11 @@ echo "[info] synchronizing device"
 sync
 
 echo "[info] adjust fstab"
-echo "LABEL=rootemmc / btrfs defaults,ssd,compress-force=zstd,noatime,nodiratime 0 1" >> /mnt/etc/fstab
+if [ "$NO_BOOT_PARTITION" == "yes" ]; then
+    echo "LABEL=rootemmc / btrfs defaults,ssd,compress-force=zstd,noatime,nodiratime 0 1" >> /mnt/etc/fstab
+else
+    sed -i 's,bootpart,bootemmc,g;s,rootpart,rootemmc,g' /mnt/etc/fstab
+fi
 
 if [ "$USE_LUKS" == "yes" ]; then
     # Update fstab to use the encrypted device
@@ -228,6 +275,9 @@ if [ "$USE_LUKS" == "yes" ]; then
 fi
 
 echo "[info] umount partitions"
+if [ "$NO_BOOT_PARTITION" == "" ]; then
+    umount /mnt/boot
+fi
 umount /mnt
 
 if [ "$USE_LUKS" == "yes" ]; then
