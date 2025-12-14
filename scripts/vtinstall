@@ -122,13 +122,11 @@ cgpt create "$TARGET"
 echo "[info] create kernel Partitions"
 cgpt add -i 1 -t kernel -b 8192 -s 262144 -l KernelA -S 1 -T 2 -P 10 "$TARGET"
 cgpt add -i 2 -t kernel -b 270336 -s 262144 -l KernelB -S 0 -T 2 -P 5 "$TARGET"
-fdisk --wipe-partitions always "$TARGET" << EOF
 if [ "$NO_BOOT_PARTITION" == "yes" ]; then
     BOOT_PART_NUM=""
     ROOT_PART_NUM="3"
     echo "[info] create other partitions (single root)"
-    {
-
+    fdisk --wipe-partitions always "$TARGET" << EOF > /dev/null #only report issue
 n
 3
 
@@ -136,12 +134,12 @@ n
 p
 w
 EOF
-    } > /dev/null #only report issue
 else
     BOOT_PART_NUM="3"
     ROOT_PART_NUM="4"
     echo "[info] create other partitions (boot + root)"
-    {
+    fdisk --wipe-partitions always "$TARGET" << EOF > /dev/null #only report issue
+n
 3
 
 +1024M
@@ -163,7 +161,6 @@ r
 p
 w
 EOF
-    } > /dev/null #only report issue
 fi
 
 partprobe $TARGET
@@ -262,7 +259,7 @@ sync
 
 echo "[info] adjust fstab"
 if [ "$NO_BOOT_PARTITION" == "yes" ]; then
-    echo "LABEL=rootemmc / btrfs defaults,ssd,compress-force=zstd,noatime,nodiratime 0 1" >> /mnt/etc/fstab
+    echo "LABEL=rootemmc / btrfs defaults,ssd,compress-force=zstd,noatime,nodiratime 0 1" > /mnt/etc/fstab
 else
     sed -i 's,bootpart,bootemmc,g;s,rootpart,rootemmc,g' /mnt/etc/fstab
 fi
